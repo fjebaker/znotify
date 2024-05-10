@@ -6,10 +6,10 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var not = try znotify.INotify.init(allocator);
-    defer not.deinit();
+    var notifier = try znotify.INotify.init(allocator);
+    defer notifier.deinit();
 
-    try not.watchPath(
+    try notifier.watchPath(
         "src",
         .{
             .create = true,
@@ -20,8 +20,7 @@ pub fn main() !void {
         },
     );
 
-    std.debug.print("Watching...\n", .{});
-    while (try not.poll()) |e| {
+    while (try notifier.poll()) |e| {
         std.debug.print(
             "NotifyEvent: {s} ({s}) dir: {any}\n",
             .{ e.path, @tagName(e.event), e.dir },
