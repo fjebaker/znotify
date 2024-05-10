@@ -17,15 +17,15 @@ pub fn main() !void {
             .moved_to = true,
             .moved_from = true,
             .delete = true,
-            .close_nowrite = true,
-            .close_write = true,
         },
     );
 
     while (try notifier.poll()) |e| {
+        const path = try notifier.getPath(allocator, e);
+        defer allocator.free(path);
         std.debug.print(
             "NotifyEvent: {s} ({s}) dir: {any}\n",
-            .{ e.path, @tagName(e.event), e.dir },
+            .{ path, @tagName(e.event), e.dir },
         );
     }
 }

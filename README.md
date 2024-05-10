@@ -26,9 +26,11 @@ pub fn main() !void {
     );
 
     while (try notifier.poll()) |e| {
+        const path = try notifier.getPath(allocator, e);
+        defer allocator.free(path);
         std.debug.print(
             "NotifyEvent: {s} ({s}) dir: {any}\n",
-            .{ e.path, @tagName(e.event), e.dir },
+            .{ path, @tagName(e.event), e.dir },
         );
     }
 }
