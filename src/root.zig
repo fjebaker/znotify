@@ -71,6 +71,8 @@ pub const Event = b: {
 
 /// An inotify event
 pub const NotifyEvent = struct {
+    /// The event file descriptor
+    fd: std.posix.fd_t,
     /// The event type
     event: Event,
     /// The path the event occured at
@@ -88,9 +90,11 @@ pub const INotify = struct {
         len: c_uint,
     };
 
-    const Monitors = std.ArrayList(std.posix.fd_t);
+    /// Maps the file descriptor to the path
+    pub const Monitors = std.AutoHashMap(std.posix.fd_t, []const u8);
 
     ifd: std.fs.File,
+    allocator: std.mem.Allocator,
     monitors: Monitors,
     name_buffer: [std.fs.MAX_NAME_BYTES]u8 = undefined,
 
@@ -103,6 +107,7 @@ pub const INotify = struct {
         const fd = try std.posix.inotify_init1(0);
         return .{
             .ifd = .{ .handle = fd },
+            .allocator = allocator,
             .monitors = Monitors.init(allocator),
         };
     }
@@ -110,26 +115,43 @@ pub const INotify = struct {
     /// Deinitialise the INotify manager. Calls `inotify_rm_watch` on all
     /// watches and closes the inotify fd
     pub fn deinit(self: *INotify) void {
-        for (self.monitors.items) |w| {
-            std.posix.inotify_rm_watch(self.getHandle(), w);
+        var keys = self.monitors.keyIterator();
+        while (keys.next()) |key| {
+            self.removeWatcherImpl(key.*);
         }
         self.monitors.deinit();
         self.ifd.close();
     }
 
+    /// Remove a watcher by file descriptor
+    pub fn removeWatcher(self: *INotify, fd: std.posix.fd_t) !void {
+        _ = self.monitors.get(fd) orelse
+            return error.NoSuchWatcher;
+        self.removeWatcherImpl(fd);
+    }
+
+    fn removeWatcherImpl(self: *INotify, fd: std.posix.fd_t) void {
+        const kv = self.monitors.fetchRemove(fd).?;
+        // free the path string
+        self.allocator.free(kv.value);
+        std.posix.inotify_rm_watch(self.getHandle(), fd);
+    }
+
     /// Add a watcher for a specific path, triggering at the events given in
     /// `Mask`
     pub fn watchPath(self: *INotify, path: []const u8, mask: Mask) !void {
-        const old_size = self.monitors.items.len;
+        try self.monitors.ensureTotalCapacity(self.monitors.unmanaged.size + 1);
 
-        const ptr = try self.monitors.addOne();
-        errdefer self.monitors.shrinkRetainingCapacity(old_size);
+        const path_copy = try self.allocator.dupe(u8, path);
+        errdefer self.allocator.free(path_copy);
 
-        ptr.* = try std.posix.inotify_add_watch(
+        const fd = try std.posix.inotify_add_watch(
             self.getHandle(),
             path,
             @bitCast(mask),
         );
+
+        self.monitors.putAssumeCapacity(fd, path_copy);
     }
 
     /// Poll for events. Will return `null` if no events have occured since the
@@ -145,11 +167,15 @@ pub const INotify = struct {
             buf[0..@sizeOf(inotify_event_t)],
         );
 
+        // std.debug.print("{any}\n", .{event});
+        // std.debug.print("{b}\n{x}\n", .{ event.mask, event.mask });
+
         const is_dir_event = event.mask & (1 << 30);
 
         if (event.len == 0) {
             // no string
             return .{
+                .fd = event.wd,
                 .path = "",
                 .event = Mask.fromInt(event.mask & Mask.event_mask).toEvent(),
                 .dir = is_dir_event != 0,
@@ -171,9 +197,21 @@ pub const INotify = struct {
         );
 
         return .{
+            .fd = event.wd,
             .path = self.name_buffer[0..name_len],
             .event = Mask.fromInt(event.mask & Mask.event_mask).toEvent(),
             .dir = is_dir_event != 0,
         };
+    }
+
+    /// Get the path of the event prefixed with the path of the watched
+    /// directory. Caller own the memory
+    pub fn getPath(
+        self: *const INotify,
+        allocator: std.mem.Allocator,
+        event: NotifyEvent,
+    ) ![]const u8 {
+        const parent_path = self.monitors.get(event.fd).?;
+        return try std.fs.path.join(allocator, &.{ parent_path, event.path });
     }
 };
