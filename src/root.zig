@@ -145,6 +145,17 @@ pub const INotify = struct {
             buf[0..@sizeOf(inotify_event_t)],
         );
 
+        const is_dir_event = event.mask & (1 << 30);
+
+        if (event.len == 0) {
+            // no string
+            return .{
+                .path = "",
+                .event = Mask.fromInt(event.mask & Mask.event_mask).toEvent(),
+                .dir = is_dir_event != 0,
+            };
+        }
+
         const name_end = std.mem.indexOfScalarPos(
             u8,
             &buf,
@@ -152,8 +163,6 @@ pub const INotify = struct {
             0,
         ) orelse buf.len;
         const name_len = name_end - @sizeOf(inotify_event_t);
-
-        const is_dir_event = event.mask & (1 << 30);
 
         std.mem.copyForwards(
             u8,

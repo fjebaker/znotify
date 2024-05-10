@@ -17,6 +17,8 @@ pub fn main() !void {
             .moved_to = true,
             .moved_from = true,
             .delete = true,
+            .close_nowrite = true,
+            .close_write = true,
         },
     );
 
