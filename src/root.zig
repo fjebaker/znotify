@@ -150,7 +150,7 @@ pub const INotify = struct {
             &buf,
             @sizeOf(inotify_event_t),
             0,
-        ).?;
+        ) orelse buf.len;
         const name_len = name_end - @sizeOf(inotify_event_t);
 
         const is_dir_event = event.mask & (1 << 30);
