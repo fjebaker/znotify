@@ -1,6 +1,6 @@
 # znotify
 
-Extending Zig's standard library wrapper of `std.posix.inofity*` to be Ziggier.
+Extending Zig's standard library wrapper of `std.posix.inotify*` to be Ziggier.
 
 ```zig
 const std = @import("std");
