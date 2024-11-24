@@ -49,7 +49,7 @@ pub const Mask = packed struct(u32) {
 pub const Event = b: {
     const EnumField = std.builtin.Type.EnumField;
 
-    const fields = @typeInfo(Mask).Struct.fields;
+    const fields = @typeInfo(Mask).@"struct".fields;
     var enum_fields: []const EnumField = &.{};
     var x: u32 = 1;
     for (fields) |f| {
@@ -66,7 +66,7 @@ pub const Event = b: {
         .is_exhaustive = false,
         .tag_type = u32,
     };
-    break :b @Type(.{ .Enum = typedef });
+    break :b @Type(.{ .@"enum" = typedef });
 };
 
 /// An inotify event

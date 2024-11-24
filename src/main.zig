@@ -27,5 +27,7 @@ pub fn main() !void {
             "NotifyEvent: {s} ({s}) dir: {any}\n",
             .{ path, @tagName(e.event), e.dir },
         );
+        try notifier.removeWatcher(e.fd);
+        break;
     }
 }
